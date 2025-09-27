@@ -103,7 +103,7 @@ nano ~/.d1-backup/.d1-config
 # D1 Backup Configuration
 CLOUDFLARE_ACCOUNT_ID='your-account-id'
 CLOUDFLARE_API_TOKEN='your-api-token'
-BACKUP_DIR='/path/to/backups'
+BACKUP_DIR='/path/to/database_backups'
 ```
 
 ## 🚀 Usage
@@ -173,7 +173,7 @@ After installation:
 ├── .d1-config                # Configuration file
 ├── databases-example.txt     # Example database list
 ├── README.md                 # Documentation
-└── d1_backups/              # Default backup directory
+└── database_backups/              # Default backup directory
     ├── database1_backup_2024-01-15.sql
     ├── database2_backup_2024-01-15.sql
     └── ...
