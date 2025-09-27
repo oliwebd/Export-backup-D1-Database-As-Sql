@@ -270,4 +270,5 @@ If this tool helped you, please consider:
 
 ---
 
-Made with ❤️ for the Cloudflare D1 community
+Made with ❤️ for the Cloudflare D1 dev community by a Bangladeshi — a farmer's son.  
+Love hard work and staying active.
