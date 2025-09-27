@@ -90,7 +90,7 @@ cat > "databases-example.txt" << 'EOF'
 # Lines starting with # are comments and will be ignored
 
 # Replace these with your actual database IDs:
-# dad5e9e8-afd8-4bb6-9498-ad585a72670c
+# xdad5e9e8-afd8-4bb6-9498-ad585a72670c
 # your-database-id-2
 # your-database-id-3
 
