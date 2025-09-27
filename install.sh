@@ -3,6 +3,11 @@
 # install.sh - D1 Backup Tool Installer
 # Quick installer for the D1 backup tool
 
+#!/bin/bash
+
+# install.sh - D1 Backup Tool Installer
+# Downloads latest files from GitHub repository
+
 set -e
 
 # Colors
@@ -17,10 +22,26 @@ log_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
 log_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
+# Configuration
+REPO_URL="https://raw.githubusercontent.com/oliwebd/Export-backup-D1-Database-As-Sql/main"
 INSTALL_DIR="$HOME/d1-backup"
+VERSION="v2.0"
 
-echo "🚀 D1 Backup Tool Installer"
-echo "=========================="
+echo "🚀 D1 Backup Tool Installer ${VERSION}"
+echo "======================================"
+
+# Check if curl or wget is available
+if command -v curl >/dev/null 2>&1; then
+    DOWNLOAD_CMD="curl -sSL"
+elif command -v wget >/dev/null 2>&1; then
+    DOWNLOAD_CMD="wget -qO-"
+else
+    log_error "Neither curl nor wget is installed!"
+    echo "Please install curl or wget first:"
+    echo "  Ubuntu/Debian: sudo apt update && sudo apt install curl"
+    echo "  CentOS/RHEL:   sudo yum install curl"
+    exit 1
+fi
 
 # Check if Node.js is installed
 if ! command -v node &> /dev/null; then
@@ -29,6 +50,7 @@ if ! command -v node &> /dev/null; then
     echo "Please install Node.js first:"
     echo "  Ubuntu/Debian: sudo apt update && sudo apt install nodejs npm"
     echo "  CentOS/RHEL:   sudo yum install nodejs npm"
+    echo "  macOS:         brew install node"
     echo "  Or visit:      https://nodejs.org/"
     exit 1
 fi
@@ -40,635 +62,65 @@ log_info "Creating installation directory: $INSTALL_DIR"
 mkdir -p "$INSTALL_DIR"
 cd "$INSTALL_DIR"
 
-# Create the main Node.js script (v2 with improvements)
-log_info "Creating D1 backup exporter script (v2)..."
-cat > "d1-backup-exporter.js" << 'NODESCRIPT'
-const https = require('https');
-const fs = require('fs');
-const path = require('path');
+# Download main Node.js script
+log_info "Downloading d1-backup-exporter.js..."
+if ! $DOWNLOAD_CMD "$REPO_URL/d1-backup-exporter.js" > "d1-backup-exporter.js"; then
+    log_error "Failed to download d1-backup-exporter.js"
+    exit 1
+fi
 
-class D1BackupExporter {
-  constructor(config) {
-    // Validate required configuration
-    if (!config.accountId) {
-      throw new Error('Account ID is required');
-    }
-    
-    if (!config.apiToken && (!config.email || !config.apiKey)) {
-      throw new Error('Either API token or email/API key combination is required');
-    }
+# Download shell wrapper script
+log_info "Downloading d1-backup.sh..."
+if ! $DOWNLOAD_CMD "$REPO_URL/d1-backup.sh" > "d1-backup.sh"; then
+    log_error "Failed to download d1-backup.sh"
+    exit 1
+fi
 
-    this.accountId = config.accountId;
-    this.apiToken = config.apiToken;
-    this.email = config.email;
-    this.apiKey = config.apiKey;
-    this.baseUrl = 'api.cloudflare.com';
-    this.backupDir = config.backupDir || './backups';
-    this.timeout = config.timeout || 30000; // 30 seconds default timeout
-    this.maxRetries = config.maxRetries || 3;
-    this.retryDelay = config.retryDelay || 1000; // 1 second
-    
-    // Ensure backup directory exists
-    if (!fs.existsSync(this.backupDir)) {
-      fs.mkdirSync(this.backupDir, { recursive: true });
-    }
-  }
+# Download README
+log_info "Downloading README.md..."
+if ! $DOWNLOAD_CMD "$REPO_URL/README.md" > "README.md"; then
+    log_warning "Failed to download README.md (continuing anyway)"
+fi
 
-  sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-  }
+# Download example database list
+log_info "Creating example database list..."
+cat > "databases-example.txt" << 'EOF'
+# Example database list file for batch operations
+# One database ID per line
+# Lines starting with # are comments and will be ignored
 
-  async makeRequest(method, endpoint, data = null, retryCount = 0) {
-    return new Promise((resolve, reject) => {
-      const options = {
-        hostname: this.baseUrl,
-        path: endpoint,
-        method: method,
-        timeout: this.timeout,
-        headers: {
-          'Content-Type': 'application/json',
-          'User-Agent': 'D1-Backup-Exporter/2.0'
-        }
-      };
+# Replace these with your actual database IDs:
+# dad5e9e8-afd8-4bb6-9498-ad585a72670c
+# your-database-id-2
+# your-database-id-3
 
-      if (this.apiToken) {
-        options.headers['Authorization'] = `Bearer ${this.apiToken}`;
-      } else if (this.email && this.apiKey) {
-        options.headers['X-Auth-Email'] = this.email;
-        options.headers['X-Auth-Key'] = this.apiKey;
-      } else {
-        return reject(new Error('Either API token or email/API key must be provided'));
-      }
-
-      const req = https.request(options, (res) => {
-        let responseBody = '';
-        
-        res.on('data', (chunk) => {
-          responseBody += chunk;
-        });
-
-        res.on('end', () => {
-          try {
-            const parsedResponse = JSON.parse(responseBody);
-            
-            if (res.statusCode >= 200 && res.statusCode < 300) {
-              resolve(parsedResponse);
-            } else {
-              // Handle rate limiting with retry
-              if (res.statusCode === 429 && retryCount < this.maxRetries) {
-                console.log(`Rate limited. Retrying in ${this.retryDelay}ms... (attempt ${retryCount + 1})`);
-                setTimeout(() => {
-                  this.makeRequest(method, endpoint, data, retryCount + 1)
-                    .then(resolve)
-                    .catch(reject);
-                }, this.retryDelay * Math.pow(2, retryCount));
-              } else {
-                const errorMsg = parsedResponse.errors?.[0]?.message || 'Unknown error';
-                reject(new Error(`HTTP ${res.statusCode}: ${errorMsg}`));
-              }
-            }
-          } catch (parseError) {
-            reject(new Error(`Failed to parse response: ${parseError.message}`));
-          }
-        });
-      });
-
-      req.on('timeout', () => {
-        req.destroy();
-        if (retryCount < this.maxRetries) {
-          console.log(`Request timeout. Retrying... (attempt ${retryCount + 1})`);
-          setTimeout(() => {
-            this.makeRequest(method, endpoint, data, retryCount + 1)
-              .then(resolve)
-              .catch(reject);
-          }, this.retryDelay);
-        } else {
-          reject(new Error(`Request timeout after ${this.maxRetries} retries`));
-        }
-      });
-
-      req.on('error', (error) => {
-        if (retryCount < this.maxRetries) {
-          console.log(`Request error: ${error.message}. Retrying... (attempt ${retryCount + 1})`);
-          setTimeout(() => {
-            this.makeRequest(method, endpoint, data, retryCount + 1)
-              .then(resolve)
-              .catch(reject);
-          }, this.retryDelay);
-        } else {
-          reject(new Error(`Request failed after ${this.maxRetries} retries: ${error.message}`));
-        }
-      });
-
-      if (data) {
-        req.write(JSON.stringify(data));
-      }
-
-      req.end();
-    });
-  }
-
-  async startExport(databaseId, options = {}) {
-    const endpoint = `/client/v4/accounts/${this.accountId}/d1/database/${databaseId}/export`;
-    
-    const requestBody = {
-      output_format: 'polling',
-      ...options
-    };
-
-    console.log(`Starting export for database: ${databaseId}`);
-    
-    try {
-      const response = await this.makeRequest('POST', endpoint, requestBody);
-      
-      if (!response.success) {
-        throw new Error(`Export failed: ${response.errors?.[0]?.message || 'Unknown error'}`);
-      }
-
-      return response.result;
-    } catch (error) {
-      throw new Error(`Failed to start export: ${error.message}`);
-    }
-  }
-
-  async pollExport(databaseId, bookmark) {
-    const endpoint = `/client/v4/accounts/${this.accountId}/d1/database/${databaseId}/export`;
-    
-    const requestBody = {
-      output_format: 'polling',
-      current_bookmark: bookmark
-    };
-
-    try {
-      const response = await this.makeRequest('POST', endpoint, requestBody);
-      
-      if (!response.success) {
-        throw new Error(`Polling failed: ${response.errors?.[0]?.message || 'Unknown error'}`);
-      }
-
-      return response.result;
-    } catch (error) {
-      throw new Error(`Failed to poll export: ${error.message}`);
-    }
-  }
-
-  async downloadFile(url, filename, retryCount = 0) {
-    return new Promise((resolve, reject) => {
-      const filePath = path.join(this.backupDir, filename);
-      const file = fs.createWriteStream(filePath);
-      
-      let downloadedBytes = 0;
-      let totalBytes = 0;
-
-      const request = https.get(url, (response) => {
-        if (response.statusCode === 302 || response.statusCode === 301) {
-          file.close();
-          fs.unlink(filePath, () => {});
-          return this.downloadFile(response.headers.location, filename, retryCount)
-            .then(resolve)
-            .catch(reject);
-        }
-
-        if (response.statusCode !== 200) {
-          file.close();
-          fs.unlink(filePath, () => {});
-          
-          if (retryCount < this.maxRetries) {
-            console.log(`Download failed with status ${response.statusCode}. Retrying... (attempt ${retryCount + 1})`);
-            setTimeout(() => {
-              this.downloadFile(url, filename, retryCount + 1)
-                .then(resolve)
-                .catch(reject);
-            }, this.retryDelay);
-          } else {
-            reject(new Error(`Download failed with status: ${response.statusCode}`));
-          }
-          return;
-        }
-
-        totalBytes = parseInt(response.headers['content-length'] || '0');
-        if (totalBytes > 0) {
-          console.log(`Downloading ${filename} (${(totalBytes / 1024 / 1024).toFixed(2)} MB)`);
-        }
-
-        response.on('data', (chunk) => {
-          downloadedBytes += chunk.length;
-          if (totalBytes > 0) {
-            const progress = ((downloadedBytes / totalBytes) * 100).toFixed(1);
-            process.stdout.write(`\rProgress: ${progress}%`);
-          }
-        });
-
-        response.pipe(file);
-
-        file.on('finish', () => {
-          file.close();
-          if (totalBytes > 0) {
-            console.log(`\nDownloaded: ${filePath} (${(downloadedBytes / 1024 / 1024).toFixed(2)} MB)`);
-          } else {
-            console.log(`Downloaded: ${filePath}`);
-          }
-          resolve(filePath);
-        });
-
-        file.on('error', (error) => {
-          fs.unlink(filePath, () => {});
-          
-          if (retryCount < this.maxRetries) {
-            console.log(`\nFile write error: ${error.message}. Retrying... (attempt ${retryCount + 1})`);
-            setTimeout(() => {
-              this.downloadFile(url, filename, retryCount + 1)
-                .then(resolve)
-                .catch(reject);
-            }, this.retryDelay);
-          } else {
-            reject(error);
-          }
-        });
-      });
-
-      request.on('error', (error) => {
-        file.close();
-        fs.unlink(filePath, () => {});
-        
-        if (retryCount < this.maxRetries) {
-          console.log(`Download request error: ${error.message}. Retrying... (attempt ${retryCount + 1})`);
-          setTimeout(() => {
-            this.downloadFile(url, filename, retryCount + 1)
-              .then(resolve)
-              .catch(reject);
-          }, this.retryDelay);
-        } else {
-          reject(error);
-        }
-      });
-
-      request.setTimeout(this.timeout, () => {
-        request.destroy();
-        file.close();
-        fs.unlink(filePath, () => {});
-        
-        if (retryCount < this.maxRetries) {
-          console.log(`Download timeout. Retrying... (attempt ${retryCount + 1})`);
-          setTimeout(() => {
-            this.downloadFile(url, filename, retryCount + 1)
-              .then(resolve)
-              .catch(reject);
-          }, this.retryDelay);
-        } else {
-          reject(new Error(`Download timeout after ${this.maxRetries} retries`));
-        }
-      });
-    });
-  }
-
-  async exportDatabase(databaseId, options = {}) {
-    const startTime = Date.now();
-    
-    try {
-      if (!databaseId || typeof databaseId !== 'string') {
-        throw new Error('Valid database ID is required');
-      }
-
-      let exportResult = await this.startExport(databaseId, options.dumpOptions);
-      console.log(`Export status: ${exportResult.status}`);
-
-      const maxPollTime = options.maxPollTime || 30 * 60 * 1000;
-      const pollStartTime = Date.now();
-
-      while (exportResult.status === 'in-progress' || exportResult.status === 'active') {
-        if (Date.now() - pollStartTime > maxPollTime) {
-          throw new Error(`Export polling timeout after ${maxPollTime / 1000} seconds`);
-        }
-
-        console.log(`Polling export... Bookmark: ${exportResult.at_bookmark}`);
-        await this.sleep(5000);
-        
-        exportResult = await this.pollExport(databaseId, exportResult.at_bookmark);
-        console.log(`Export status: ${exportResult.status}`);
-      }
-
-      if (exportResult.status === 'complete' && exportResult.result?.signed_url) {
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T')[0];
-        const filename = exportResult.result.filename || `${databaseId}_backup_${timestamp}.sql`;
-        const filePath = await this.downloadFile(exportResult.result.signed_url, filename);
-        
-        const totalTime = ((Date.now() - startTime) / 1000).toFixed(2);
-        console.log(`Export completed in ${totalTime} seconds`);
-        
-        return {
-          success: true,
-          filePath,
-          filename,
-          databaseId,
-          exportTime: totalTime,
-          fileSize: fs.statSync(filePath).size
-        };
-      } else if (exportResult.status === 'error') {
-        throw new Error(`Export failed: ${exportResult.error || 'Unknown error'}`);
-      } else {
-        throw new Error(`Export completed with unexpected status: ${exportResult.status}`);
-      }
-
-    } catch (error) {
-      throw new Error(`Database export failed: ${error.message}`);
-    }
-  }
-
-  async exportMultipleDatabases(databaseIds, options = {}) {
-    const results = [];
-    const startTime = Date.now();
-    
-    console.log(`Starting batch export of ${databaseIds.length} databases...`);
-    
-    for (let i = 0; i < databaseIds.length; i++) {
-      const databaseId = databaseIds[i];
-      const progress = `[${i + 1}/${databaseIds.length}]`;
-      
-      try {
-        console.log(`\n${progress} --- Exporting database: ${databaseId} ---`);
-        const result = await this.exportDatabase(databaseId, options);
-        results.push(result);
-        console.log(`✅ ${progress} Successfully exported: ${result.filename} (${(result.fileSize / 1024 / 1024).toFixed(2)} MB)`);
-      } catch (error) {
-        console.error(`❌ ${progress} Failed to export ${databaseId}: ${error.message}`);
-        results.push({
-          success: false,
-          error: error.message,
-          databaseId
-        });
-      }
-      
-      if (i < databaseIds.length - 1) {
-        await this.sleep(2000);
-      }
-    }
-
-    const totalTime = ((Date.now() - startTime) / 1000).toFixed(2);
-    const successCount = results.filter(r => r.success).length;
-    const failCount = results.filter(r => !r.success).length;
-    
-    console.log(`\n📊 Batch Export Summary:`);
-    console.log(`Total time: ${totalTime} seconds`);
-    console.log(`Successful: ${successCount}`);
-    console.log(`Failed: ${failCount}`);
-
-    return results;
-  }
-
-  async listDatabases() {
-    const endpoint = `/client/v4/accounts/${this.accountId}/d1/database`;
-    
-    try {
-      const response = await this.makeRequest('GET', endpoint);
-      
-      if (!response.success) {
-        throw new Error(`Failed to list databases: ${response.errors?.[0]?.message || 'Unknown error'}`);
-      }
-
-      return response.result;
-    } catch (error) {
-      throw new Error(`Failed to list databases: ${error.message}`);
-    }
-  }
-}
-
-module.exports = D1BackupExporter;
-NODESCRIPT
-
-# Create shell wrapper (the full shell script from the previous artifact)
-log_info "Creating shell wrapper script..."
-cat > "d1-backup.sh" << 'SHELLSCRIPT'
-#!/bin/bash
-
-set -e
-
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-NODE_SCRIPT="${SCRIPT_DIR}/d1-backup-exporter.js"
-CONFIG_FILE="${SCRIPT_DIR}/.d1-config"
-BACKUP_DIR="${SCRIPT_DIR}/d1_backups"
-
-log_info() { echo -e "${BLUE}[INFO]${NC} $1"; }
-log_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
-log_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
-log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
-
-show_usage() {
-    cat << EOF
-D1 Database Backup Tool
-
-Usage: $0 [OPTIONS] [DATABASE_ID]
-
-OPTIONS:
-    -h, --help              Show this help message
-    -c, --config            Setup configuration
-    -d, --dir DIR          Backup directory (default: ./d1_backups)
-    -m, --multiple         Backup multiple databases from file
-    -f, --file FILE        File containing database IDs (one per line)
-    --no-data              Export schema only (no data)
-    --no-schema            Export data only (no schema)
-    --tables TABLE1,TABLE2 Export specific tables only
-
-EXAMPLES:
-    $0 --config                           # Setup configuration
-    $0 abc123-def456-ghi789               # Backup single database
-    $0 -d /backups abc123-def456-ghi789   # Backup to specific directory
-    $0 --multiple -f databases.txt        # Backup multiple databases
-
+# You can get your database IDs from:
+# https://dash.cloudflare.com/
+# Navigate to: Workers & Pages > D1 SQL Database
 EOF
-}
 
-setup_config() {
-    log_info "Setting up D1 Backup configuration..."
-    
-    echo
-    echo "Choose authentication method:"
-    echo "1) API Token (Recommended)"
-    echo "2) Email + API Key"
-    read -p "Select option (1 or 2): " auth_method
-    
-    cat > "$CONFIG_FILE" << EOF
-# D1 Backup Configuration
-# Generated on $(date)
-
-EOF
-    
-    read -p "Enter your Cloudflare Account ID: " account_id
-    echo "CLOUDFLARE_ACCOUNT_ID='$account_id'" >> "$CONFIG_FILE"
-    
-    if [ "$auth_method" = "1" ]; then
-        read -s -p "Enter your Cloudflare API Token: " api_token
-        echo
-        echo "CLOUDFLARE_API_TOKEN='$api_token'" >> "$CONFIG_FILE"
-    else
-        read -p "Enter your Cloudflare Email: " email
-        read -s -p "Enter your Cloudflare API Key: " api_key
-        echo
-        echo "CLOUDFLARE_EMAIL='$email'" >> "$CONFIG_FILE"
-        echo "CLOUDFLARE_API_KEY='$api_key'" >> "$CONFIG_FILE"
-    fi
-    
-    chmod 600 "$CONFIG_FILE"
-    log_success "Configuration saved to $CONFIG_FILE"
-}
-
-load_config() {
-    if [ -f "$CONFIG_FILE" ]; then
-        source "$CONFIG_FILE"
-        log_info "Loaded configuration from $CONFIG_FILE"
-    fi
-}
-
-check_prerequisites() {
-    if ! command -v node &> /dev/null; then
-        log_error "Node.js is not installed."
-        exit 1
-    fi
-    
-    if [ ! -f "$NODE_SCRIPT" ]; then
-        log_error "Node.js script not found: $NODE_SCRIPT"
-        exit 1
-    fi
-    
-    if [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
-        log_error "CLOUDFLARE_ACCOUNT_ID not set. Run '$0 --config'"
-        exit 1
-    fi
-    
-    if [ -z "$CLOUDFLARE_API_TOKEN" ] && ([ -z "$CLOUDFLARE_EMAIL" ] || [ -z "$CLOUDFLARE_API_KEY" ]); then
-        log_error "Authentication not configured. Run '$0 --config'"
-        exit 1
-    fi
-}
-
-create_node_wrapper() {
-    local database_id="$1"
-    local dump_options="$2"
-    local is_multiple="$3"
-    local db_file="$4"
-    
-    cat > "/tmp/d1-backup-run.js" << EOF
-const D1BackupExporter = require('$NODE_SCRIPT');
-
-async function runBackup() {
-    const config = {
-        accountId: process.env.CLOUDFLARE_ACCOUNT_ID,
-        apiToken: process.env.CLOUDFLARE_API_TOKEN,
-        email: process.env.CLOUDFLARE_EMAIL,
-        apiKey: process.env.CLOUDFLARE_API_KEY,
-        backupDir: process.env.BACKUP_DIR || '$BACKUP_DIR'
-    };
-
-    const exporter = new D1BackupExporter(config);
-
-    try {
-        if ('$is_multiple' === 'true') {
-            const fs = require('fs');
-            const databaseIds = fs.readFileSync('$db_file', 'utf8')
-                .split('\\n')
-                .map(line => line.trim())
-                .filter(line => line && !line.startsWith('#'));
-            
-            const results = await exporter.exportMultipleDatabases(databaseIds, {
-                dumpOptions: $dump_options
-            });
-            
-            console.log('\\n📊 Export Summary:');
-            results.forEach(result => {
-                if (result.success) {
-                    console.log(\`✅ \${result.databaseId}: \${result.filename}\`);
-                } else {
-                    console.log(\`❌ \${result.databaseId}: \${result.error}\`);
-                }
-            });
-        } else {
-            const result = await exporter.exportDatabase('$database_id', {
-                dumpOptions: $dump_options
-            });
-            
-            console.log('\\n🎉 Export completed successfully!');
-            console.log(\`File saved to: \${result.filePath}\`);
-        }
-    } catch (error) {
-        console.error('❌ Export failed:', error.message);
-        process.exit(1);
-    }
-}
-
-runBackup();
-EOF
-}
-
-main() {
-    local database_id=""
-    local dump_options="{}"
-    local is_multiple="false"
-    local db_file=""
-    
-    while [[ $# -gt 0 ]]; do
-        case $1 in
-            -h|--help) show_usage; exit 0 ;;
-            -c|--config) setup_config; exit 0 ;;
-            -d|--dir) BACKUP_DIR="$2"; shift 2 ;;
-            -m|--multiple) is_multiple="true"; shift ;;
-            -f|--file) db_file="$2"; shift 2 ;;
-            --no-data) dump_options='{"no_data": true}'; shift ;;
-            --no-schema) dump_options='{"no_schema": true}'; shift ;;
-            --tables) 
-                IFS=',' read -ra table_array <<< "$2"
-                tables="[\"$(IFS='","'; echo "${table_array[*]}")\"]"
-                dump_options="{\"tables\": $tables}"
-                shift 2 ;;
-            -*) log_error "Unknown option: $1"; exit 1 ;;
-            *) 
-                if [ -z "$database_id" ]; then
-                    database_id="$1"
-                else
-                    log_error "Multiple database IDs provided"
-                    exit 1
-                fi
-                shift ;;
-        esac
-    done
-    
-    load_config
-    check_prerequisites
-    
-    if [ "$is_multiple" = "true" ] && [ -z "$db_file" ]; then
-        log_error "Multiple backup requires --file option"
-        exit 1
-    fi
-    
-    if [ "$is_multiple" = "false" ] && [ -z "$database_id" ]; then
-        log_error "Database ID required"
-        exit 1
-    fi
-    
-    mkdir -p "$BACKUP_DIR"
-    
-    export CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_API_TOKEN CLOUDFLARE_EMAIL CLOUDFLARE_API_KEY BACKUP_DIR
-    
-    create_node_wrapper "$database_id" "$dump_options" "$is_multiple" "$db_file"
-    
-    log_info "Starting D1 database backup..."
-    node /tmp/d1-backup-run.js
-    
-    rm -f /tmp/d1-backup-run.js
-    log_success "Backup process completed!"
-}
-
-main "$@"
-SHELLSCRIPT
-
-# Make scripts executable
-# Make scripts executable
+# Make shell script executable
 chmod +x d1-backup.sh
+
+# Verify downloaded files
+log_info "Verifying installation..."
+if [ ! -f "d1-backup-exporter.js" ] || [ ! -s "d1-backup-exporter.js" ]; then
+    log_error "d1-backup-exporter.js is missing or empty"
+    exit 1
+fi
+
+if [ ! -f "d1-backup.sh" ] || [ ! -s "d1-backup.sh" ]; then
+    log_error "d1-backup.sh is missing or empty"
+    exit 1
+fi
+
+# Test if the script works
+log_info "Testing installation..."
+if ./d1-backup.sh --help >/dev/null 2>&1; then
+    log_success "Installation test passed!"
+else
+    log_warning "Installation test failed, but files are downloaded"
+fi
 
 log_success "Installation completed successfully!"
 log_info "Installation directory: $INSTALL_DIR"
@@ -677,75 +129,26 @@ echo
 echo "🎉 Installation Complete!"
 echo "========================"
 echo
-echo "Next steps:"
+echo "Files created:"
+echo "  ✓ d1-backup.sh           - Main backup script"
+echo "  ✓ d1-backup-exporter.js  - Node.js backend"
+echo "  ✓ databases-example.txt  - Example database list"
+if [ -f "README.md" ]; then
+    echo "  ✓ README.md             - Documentation"
+fi
+echo
+echo "📋 Next Steps:"
 echo "1. cd $INSTALL_DIR"
-echo "2. ./d1-backup.sh --config    # Setup your Cloudflare credentials"
-echo "3. ./d1-backup.sh YOUR_DB_ID  # Backup your first database"
+echo "2. ./d1-backup.sh --config      # Setup your Cloudflare credentials"
+echo "3. ./d1-backup.sh YOUR_DB_ID    # Backup your first database"
 echo
-echo "For help: ./d1-backup.sh --help"
+echo "📚 For help:"
+echo "  ./d1-backup.sh --help"
+echo "  cat README.md"
 echo
-
-# Create example database list file
-cat > "databases-example.txt" << 'DBLIST'
-# Example database list file
-# One database ID per line
-# Lines starting with # are comments
-
-# your-database-id-1
-# your-database-id-2
-# your-database-id-3
-DBLIST
-
-# Create a quick start guide
-cat > "README.md" << 'README'
-# D1 Backup Tool
-
-Easy-to-use command line tool for backing up Cloudflare D1 databases.
-
-## Quick Start
-
-1. **Setup configuration:**
-   ```bash
-   ./d1-backup.sh --config
-   ```
-
-2. **Backup a single database:**
-   ```bash
-   ./d1-backup.sh your-database-id
-   ```
-
-3. **Backup multiple databases:**
-   ```bash
-   # Edit databases.txt with your database IDs
-   ./d1-backup.sh --multiple -f databases.txt
-   ```
-
-## Usage Examples
-
-```bash
-# Show help
-./d1-backup.sh --help
-
-# Setup credentials
-./d1-backup.sh --config
-
-# Basic backup
-./d1-backup.sh abc123-def456-ghi789
-
-# Backup to specific directory
-./d1-backup.sh -d /path/to/backups abc123-def456-ghi789
-
-# Schema only backup
-./d1-backup.sh --no-data abc123-def456-ghi789
-
-# Backup specific tables only
-./d1-backup.sh --tables users,orders abc123-def456-ghi789
-```
-
-## Files
-
-- `d1-backup.sh` - Main shell script
-- `d1-backup-exporter.js` - Node.js backend
-- `.d1-config` - Configuration file (created after setup)
-- `databases-example.txt` - Example database list
-README
+echo "🔧 Configuration:"
+echo "  Your credentials will be stored in: $INSTALL_DIR/.d1-config"
+echo "  Backups will be saved to: $INSTALL_DIR/d1_backups/"
+echo
+echo "🌟 Repository: https://github.com/oliwebd/Export-backup-D1-Database-As-Sql"
+echo
