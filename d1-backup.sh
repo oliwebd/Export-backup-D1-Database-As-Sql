@@ -11,7 +11,7 @@ NC='\033[0m'
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NODE_SCRIPT="${SCRIPT_DIR}/d1-backup-exporter.js"
 CONFIG_FILE="${SCRIPT_DIR}/.d1-config"
-BACKUP_DIR="${SCRIPT_DIR}/d1_backups"
+BACKUP_DIR="${SCRIPT_DIR}/database_backups"
 
 log_info() { echo -e "${BLUE}[INFO]${NC} $1"; }
 log_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
