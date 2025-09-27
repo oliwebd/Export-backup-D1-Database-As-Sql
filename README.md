@@ -20,10 +20,11 @@ Easy-to-use command line tool for exporting and backing up Cloudflare D1 databas
 ```bash
 # Users run this:
 curl -sSL https://raw.githubusercontent.com/oliwebd/Export-backup-D1-Database-As-Sql/main/install.sh | bash
+
 ```
 ## Or
 ```bash
-# Ordownload and run:
+# Or download and run:
 wget https://raw.githubusercontent.com/oliwebd/Export-backup-D1-Database-As-Sql/main/install.sh
 chmod +x install.sh
 ./install.sh
@@ -32,7 +33,7 @@ chmod +x install.sh
 ### 2. Navigate to Installation Directory
 
 ```bash
-cd ~/d1-backup
+cd /d1-backup
 ```
 
 ### 3. Setup Configuration
