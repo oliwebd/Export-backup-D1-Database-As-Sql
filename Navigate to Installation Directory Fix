@@ -33,7 +33,7 @@ chmod +x install.sh
 ### 2. Navigate to Installation Directory
 
 ```bash
-cd /d1-backup
+cd ./d1-backup
 ```
 
 ### 3. Setup Configuration
