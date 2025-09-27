@@ -1,0 +1,4 @@
+# D1 Backup Configuration
+CLOUDFLARE_ACCOUNT_ID='your-account-id'
+CLOUDFLARE_API_TOKEN='your-api-token'
+BACKUP_DIR='/path/to/backups'
