@@ -481,7 +481,23 @@ main "$@"
 SHELLSCRIPT
 
 # Make scripts executable
+# Make scripts executable
 chmod +x d1-backup.sh
+
+log_success "Installation completed successfully!"
+log_info "Installation directory: $INSTALL_DIR"
+
+echo
+echo "🎉 Installation Complete!"
+echo "========================"
+echo
+echo "Next steps:"
+echo "1. cd $INSTALL_DIR"
+echo "2. ./d1-backup.sh --config    # Setup your Cloudflare credentials"
+echo "3. ./d1-backup.sh YOUR_DB_ID  # Backup your first database"
+echo
+echo "For help: ./d1-backup.sh --help"
+echo
 
 # Create example database list file
 cat > "databases-example.txt" << 'DBLIST'
@@ -546,3 +562,4 @@ Easy-to-use command line tool for backing up Cloudflare D1 databases.
 - `d1-backup-exporter.js` - Node.js backend
 - `.d1-config` - Configuration file (created after setup)
 - `databases-example.txt` - Example database list
+README
