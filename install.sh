@@ -24,8 +24,13 @@ log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
 # Configuration
 REPO_URL="https://raw.githubusercontent.com/oliwebd/Export-backup-D1-Database-As-Sql/main"
-INSTALL_DIR="$HOME/d1-backup"
-VERSION="v2.0"
+# INSTALL_DIR="$HOME/d1-backup" update to option 1
+# Option 1: relative to where you run the script
+INSTALL_DIR="$PWD/d1-backup"
+
+# Option 2: relative to script location
+# SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# INSTALL_DIR="$SCRIPT_DIR/d1-backup"
 
 echo "🚀 D1 Backup Tool Installer ${VERSION}"
 echo "======================================"
