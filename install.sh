@@ -23,7 +23,7 @@ log_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
 # Configuration
-REPO_URL="https://raw.githubusercontent.com/oliwebd/Export-backup-D1-Database-As-Sql/main"
+REPO_URL="https://raw.githubusercontent.com/oliwebd/d1-backup/main"
 # INSTALL_DIR="$HOME/d1-backup" update to option 1
 # Option 1: relative to where you run the script
 INSTALL_DIR="$PWD/d1-backup"
