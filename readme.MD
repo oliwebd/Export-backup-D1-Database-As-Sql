@@ -1,4 +1,4 @@
-# 📦 Export & Backup D1 Database As SQL
+# 📦d1-backup: Export & Backup Cloudflare D1 Database As SQL file by API/CLI
 
 Easy-to-use command line tool for exporting and backing up Cloudflare D1 databases to SQL files. Supports single and multiple database backups with advanced options.
 
@@ -19,13 +19,13 @@ Easy-to-use command line tool for exporting and backing up Cloudflare D1 databas
 
 ```bash
 # Users run this:
-curl -sSL https://raw.githubusercontent.com/oliwebd/Export-backup-D1-Database-As-Sql/main/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/oliwebd/d1-backup/main/install.sh | bash
 
 ```
 ## Or
 ```bash
 # Or download and run:
-wget https://raw.githubusercontent.com/oliwebd/Export-backup-D1-Database-As-Sql/main/install.sh
+wget https://raw.githubusercontent.com/oliwebd/d1-backup/main/install.sh
 chmod +x install.sh
 ./install.sh
 ```
